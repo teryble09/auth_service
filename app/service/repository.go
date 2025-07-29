@@ -7,8 +7,8 @@ import (
 
 type Repository interface {
 	CreateNewSession(model.Session) (sessionID int64, err error)
-	// RefreshSession(sessionID int64, newHashedRefreshToken string) error
+	RefreshSession(sessionID int64, newIP string, newHashedRefreshToken string) error
 	GetUserGuid(sessionID int64) (uuid.UUID, error)
-	// GetSession(sessionID int64) (model.Session, error)
-	// DeleteSession(sessionID int64) (model.Session, error)
+	GetSession(sessionID int64) (model.Session, error)
+	DeleteSession(sessionID int64) error
 }

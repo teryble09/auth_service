@@ -19,7 +19,7 @@ func NewSession(srv *service.AuthService) http.HandlerFunc {
 		req := dto.NewSessionRequest{}
 		err := json.NewDecoder(r.Body).Decode(&req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "Request is invalid", http.StatusBadRequest)
 			return
 		}
 
@@ -32,6 +32,44 @@ func NewSession(srv *service.AuthService) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Add("Content-Type", "application-json")
+		err = json.NewEncoder(w).Encode(resp)
+		if err != nil {
+			http.Error(w, "Internal error", http.StatusInternalServerError)
+			srv.Logger.Error("Could not create json response", "error", err.Error())
+			return
+		}
+	}
+}
+
+func RefreshToken(srv *service.AuthService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		req := dto.RefreshPairRequest{}
+		err := json.NewDecoder(r.Body).Decode(&req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Missing authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Invalid authorization format", http.StatusBadRequest)
+			return
+		}
+
+		req.AccessToken = parts[1]
+		req.UserAgent = r.UserAgent()
+		req.IP, _, _ = net.SplitHostPort(r.RemoteAddr)
+
+		resp, err := srv.RefreshPair(req)
 		w.Header().Add("Content-Type", "application-json")
 		err = json.NewEncoder(w).Encode(resp)
 		if err != nil {

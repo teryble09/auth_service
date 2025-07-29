@@ -45,6 +45,7 @@ func main() {
 
 	router.Post("/token", handler.NewSession(srv))
 	router.Get("/user_guid", custom_middleware.VerifyToken(handler.GetUserGuid(srv), srv.Secret))
+	router.Post("/refresh", custom_middleware.VerifyToken(handler.RefreshToken(srv), srv.Secret))
 
 	err = http.ListenAndServe("0.0.0.0:"+port, router)
 	if err != nil {

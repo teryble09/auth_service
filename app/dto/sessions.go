@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -15,10 +17,35 @@ type NewSessionResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type RefreshPairRequest struct {
+	AccessToken  string
+	RefreshToken string `json:"refresh_token"`
+
+	Secret    string
+	UserAgent string
+	IP        string
+}
+
+type RefreshPairResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
 type GetUserGuidRequest struct {
 	SessionID int64
 }
 
 type GetUserGuidResponse struct {
 	UserGUID uuid.UUID `json:"user_guid"`
+}
+
+type DeactivateSessionRequest struct {
+	AccessToken string
+}
+
+type WebhookPostMessage struct {
+	UserGUID uuid.UUID `json:"user_guid"`
+	OldIP    string    `json:"old_ip"`
+	NewIP    string    `json:"new_ip"`
+	Time     time.Time `json:"time"`
 }
