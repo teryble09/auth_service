@@ -14,3 +14,11 @@ type NewSessionResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+type GetUserGuidRequest struct {
+	SessionID int64
+}
+
+type GetUserGuidResponse struct {
+	UserGUID uuid.UUID `json:"user_guid"`
+}

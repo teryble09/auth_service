@@ -65,7 +65,7 @@ func GetSessionIDFrom(tokenString string, secret []byte) (sessionID int64, err e
 func Verify(tokenString string, secret []byte) error {
 	claims, err := GetClaimsFrom(tokenString, secret)
 	if err != nil {
-		return err
+		return ErrTokenInvalid
 	}
 	switch time.Now().Compare(claims.ExpiresAt.Time) {
 	case -1:

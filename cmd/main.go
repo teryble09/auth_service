@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/teryble09/auth_service/app/handler"
+	custom_middleware "github.com/teryble09/auth_service/app/middleware"
 	"github.com/teryble09/auth_service/app/service"
 	"github.com/teryble09/auth_service/app/storage/postgres"
 )
@@ -30,8 +32,10 @@ func main() {
 	}
 
 	srv := &service.AuthService{
-		Logger: logger,
-		DB:     db,
+		Logger:        logger,
+		DB:            db,
+		TokenLivetime: time.Hour,
+		Secret:        "asdf",
 	}
 
 	router := chi.NewRouter()
@@ -40,6 +44,7 @@ func main() {
 	router.Use(middleware.Recoverer)
 
 	router.Post("/token", handler.NewSession(srv))
+	router.Get("/user_guid", custom_middleware.VerifyToken(handler.GetUserGuid(srv), srv.Secret))
 
 	err = http.ListenAndServe("0.0.0.0:"+port, router)
 	if err != nil {

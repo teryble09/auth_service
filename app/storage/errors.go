@@ -1,3 +1,7 @@
 package storage
 
-var ()
+import "errors"
+
+var (
+	ErrSessionNotExist = errors.New("session does not exist")
+)

@@ -51,3 +51,8 @@ func (srv *AuthService) NewSession(req dto.NewSessionRequest) (resp dto.NewSessi
 
 	return resp, nil
 }
+
+func (srv *AuthService) GetUserGuid(req dto.GetUserGuidRequest) (dto.GetUserGuidResponse, error) {
+	guid, err := srv.DB.GetUserGuid(req.SessionID)
+	return dto.GetUserGuidResponse{UserGUID: guid}, err
+}
