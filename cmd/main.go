@@ -18,7 +18,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 
-	port = ":8080"
+	port = "8080"
 
 	if port == "" {
 		panic("No port specified for server")
@@ -29,7 +29,7 @@ func main() {
 		panic(err.Error())
 	}
 
-	srv := service.AuthService{
+	srv := &service.AuthService{
 		Logger: logger,
 		DB:     db,
 	}
@@ -39,7 +39,10 @@ func main() {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
-	router.Get("token", handler.NewSession(srv))
+	router.Post("/token", handler.NewSession(srv))
 
-	http.ListenAndServe("1.1.1.1:"+port, router)
+	err = http.ListenAndServe("0.0.0.0:"+port, router)
+	if err != nil {
+		panic(err)
+	}
 }

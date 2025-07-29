@@ -13,7 +13,10 @@ type DB struct {
 
 func NewDatabaseConnection(cnnstring string) (DB, error) {
 	db, err := sql.Open("postgres", cnnstring)
-	db.Exec(`
+	if err != nil {
+		return DB{}, err
+	}
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS sessions (
     	session_id         BIGSERIAL PRIMARY KEY,
      	user_guid          UUID NOT NULL,
@@ -22,10 +25,22 @@ func NewDatabaseConnection(cnnstring string) (DB, error) {
         refresh_token_hash TEXT NOT NULL,
         created_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )`)
+	if err != nil {
+		return DB{}, err
+	}
+
+	stmtCreateNewSession, err = db.Prepare(`
+		INSERT INTO sessions (user_guid, user_agent, ip, refresh_token_hash)
+         VALUES ($1, $2, $3, $4)
+         RETURNING session_id`)
 
 	return DB{db}, err
 }
 
-func (db DB) CreateNewSession(session model.Session) (sessionID int64, err error) {
+var stmtCreateNewSession = &sql.Stmt{}
 
+func (db DB) CreateNewSession(session model.Session) (sessionID int64, err error) {
+	row := stmtCreateNewSession.QueryRow(session.UserGUID, session.UserAgent, session.IP, session.RefreshTokenHash)
+	err = row.Scan(&sessionID)
+	return
 }
