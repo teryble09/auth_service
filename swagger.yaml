@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: Authentication Service API
+  description: |
+    REST API для управления сессиями пользователей.
+    Все защищенные эндпоинты требуют Bearer-токен в заголовке `Authorization`.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Локальный сервер (разработка)
+
+paths:
+  /token:
+    post:
+      summary: Создание новой сессии
+      description: |
+        Генерирует пару access/refresh токенов на основе user_guid.
+        IP и User-Agent автоматически определяются из запроса.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewSessionRequest"
+      responses:
+        "200":
+          description: Успешное создание сессии
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewSessionResponse"
+        "400":
+          description: |
+            Некорректный запрос:
+            - Отсутствует user_guid
+            - Невалидный формат UUID
+        "500":
+          description: Внутренняя ошибка сервера
+      tags:
+        - Authentication
+
+  /user_guid:
+    get:
+      summary: Получение user_guid текущей сессии
+      description: Возвращает user_guid, связанный с активной сессией
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Успешное получение user_guid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetUserGuidResponse"
+        "401":
+          description: |
+            Токен отсутствует или невалиден:
+            - Нет заголовка Authorization
+            - Неверный формат токена
+        "403":
+          description: Токен находится в черном списке (деактивирован)
+        "500":
+          description: Внутренняя ошибка сервера
+      tags:
+        - Authentication
+
+  /refresh:
+    post:
+      summary: Обновление токенов
+      description: |
+        Генерирует новую пару токенов с использованием refresh_token.
+        Требует передачи refresh_token в теле и access_token в заголовке.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshPairRequest"
+      responses:
+        "200":
+          description: Успешное обновление токенов
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshPairResponse"
+        "400":
+          description: |
+            Некорректный refresh_token:
+            - Пустое значение
+            - Невалидный токен
+        "403":
+          description: |
+            Запрещено:
+            - Изменение User-Agent или IP
+        "401":
+          description: Невалидный access_token
+        "500":
+          description: Внутренняя ошибка сервера
+      tags:
+        - Authentication
+
+  /deactivate:
+    delete:
+      summary: Деактивация текущей сессии
+      description: Помещает текущий access_token в черный список
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Сессия успешно деактивирована
+        "401":
+          description: Невалидный токен
+        "403":
+          description: Токен уже деактивирован
+        "500":
+          description: Внутренняя ошибка сервера
+      tags:
+        - Authentication
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Требуется для защищенных эндпоинтов.
+        Пример: `Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uX2lkIjoyOSwiZXhwIjoxNzUzODk1ODMwLCJpYXQiOjE3NTM4OTIyMzB9.eJKFtajoKiYScy7v_ac2BTJi99jfEwFYU1aKxr7WN0oHHxtakpIOfjX22ExBPD-kgOJzsgjW3fcBcM4Y7vmKdA
+
+  schemas:
+    NewSessionRequest:
+      type: object
+      properties:
+        user_guid:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор пользователя
+      required:
+        - user_guid
+      example:
+        user_guid: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+
+    NewSessionResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT токен для доступа к API (срок жизни - TokenLivetime)
+        refresh_token:
+          type: string
+          description: Токен для обновления access_token
+      required:
+        - access_token
+        - refresh_token
+      example:
+        access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxeyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uX2lkIjoyOSwiZXhwIjoxNzUzODk1ODMwLCJpYXQiOjE3NTM4OTIyMzB9.eJKFtajoKiYScy7v_ac2BTJi99jfEwFYU1aKxr7WN0oHHxtakpIOfjX22ExBPD-kgOJzsgjW3fcBcM4Y7vmKdA"
+        refresh_token: "SzVSN0xERktPVjdWUjRVVU4zSjZNTjZIR0s"
+
+    RefreshPairRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: Токен для обновления сессии
+      required:
+        - refresh_token
+      example:
+        refresh_token: "SzVSN0xERktPVjdWUjRVVU4zSjZNTjZIR0s"
+
+    RefreshPairResponse:
+      allOf:
+        - $ref: "#/components/schemas/NewSessionResponse"
+      description: |
+        Идентичен ответу /token, но с новыми токенами.
+        Старый access_token автоматически помещается в черный список.
+
+    GetUserGuidResponse:
+      type: object
+      properties:
+        user_guid:
+          type: string
+          format: uuid
+          description: Идентификатор пользователя из активной сессии
+      required:
+        - user_guid
+      example:
+        user_guid: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"

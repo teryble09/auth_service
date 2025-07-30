@@ -53,6 +53,7 @@ func main() {
 	router.With(authMidlleware).Get("/user_guid", handler.GetUserGuid(srv))
 	router.With(authMidlleware).Post("/refresh", handler.RefreshToken(srv))
 	router.With(authMidlleware).Delete("/deactivate", handler.DeactivateSession(srv))
+
 	err = http.ListenAndServe("0.0.0.0:"+port, router)
 	if err != nil {
 		panic(err)

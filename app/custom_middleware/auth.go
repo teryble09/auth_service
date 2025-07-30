@@ -35,11 +35,7 @@ func NewVerifyToken(secret string, blacklist *cache.Cache) func(next http.Handle
 
 			claims, err := access_token.VerifyAndGetClaims(accessToken, []byte(secret))
 
-			switch err {
-			case access_token.ErrTokenExpired:
-				http.Error(w, "Token expired", http.StatusUnauthorized)
-				return
-			case access_token.ErrTokenInvalid:
+			if err != nil {
 				http.Error(w, "Token is invalid", http.StatusUnauthorized)
 				return
 			}
