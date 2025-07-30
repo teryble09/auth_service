@@ -42,6 +42,7 @@ func main() {
 		TokenLivetime: time.Minute * 15,
 		Secret:        os.Getenv("JWT_SECRET"),
 		BlackList:     blacklist,
+		WebhookAdress: os.Getenv("WEBHOOK_ADRESS"),
 	}
 
 	router := chi.NewRouter()
