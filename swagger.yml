@@ -93,7 +93,7 @@ paths:
         "403":
           description: |
             Запрещено:
-            - Изменение User-Agent или IP
+            - Изменение User-Agent
         "401":
           description: Невалидный access_token
         "500":
@@ -127,7 +127,7 @@ components:
       bearerFormat: JWT
       description: |
         Требуется для защищенных эндпоинтов.
-        Пример: `Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uX2lkIjoyOSwiZXhwIjoxNzUzODk1ODMwLCJpYXQiOjE3NTM4OTIyMzB9.eJKFtajoKiYScy7v_ac2BTJi99jfEwFYU1aKxr7WN0oHHxtakpIOfjX22ExBPD-kgOJzsgjW3fcBcM4Y7vmKdA
+        Пример: `Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uX2lkIjoyOSwiZXhwIjoxNzUzODk1ODMwLCJpYXQiOjE3NTM4OTIyMzB9.eJKFtajoKiYScy7v_ac2BTJi99jfEwFYU1aKxr7WN0oHHxtakpIOfjX22ExBPD-kgOJzsgjW3fcBcM4Y7vmKdA`
 
   schemas:
     NewSessionRequest:

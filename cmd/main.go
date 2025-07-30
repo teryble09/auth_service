@@ -19,15 +19,17 @@ import (
 func main() {
 	logger := slog.Default()
 
-	port := os.Getenv("PORT")
+	port := "8080"
 
-	port = "8080"
+	cnnstring := fmt.Sprintf("host=%s port=%s dbname=%s user=%s password=%s sslmode=disable",
+		os.Getenv("DB_HOST"),
+		os.Getenv("DB_PORT"),
+		os.Getenv("DB_NAME"),
+		os.Getenv("DB_USER"),
+		os.Getenv("DB_PASSWORD"),
+	)
 
-	if port == "" {
-		panic("No port specified for server")
-	}
-
-	db, err := postgres.NewDatabaseConnection(fmt.Sprintf("port=5432 dbname=chat_db user=chat password=chat sslmode=disable"))
+	db, err := postgres.NewDatabaseConnection(cnnstring)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -37,8 +39,8 @@ func main() {
 	srv := &service.AuthService{
 		Logger:        logger,
 		DB:            db,
-		TokenLivetime: time.Second,
-		Secret:        "asdf",
+		TokenLivetime: time.Minute * 15,
+		Secret:        os.Getenv("JWT_SECRET"),
 		BlackList:     blacklist,
 	}
 
@@ -54,6 +56,7 @@ func main() {
 	router.With(authMidlleware).Post("/refresh", handler.RefreshToken(srv))
 	router.With(authMidlleware).Delete("/deactivate", handler.DeactivateSession(srv))
 
+	srv.Logger.Info("Starting server on port: " + port)
 	err = http.ListenAndServe("0.0.0.0:"+port, router)
 	if err != nil {
 		panic(err)
