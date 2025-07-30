@@ -1,4 +1,4 @@
-package token
+package access_token
 
 import (
 	"errors"
@@ -17,12 +17,12 @@ type SessionClaims struct {
 	jwt.RegisteredClaims
 }
 
-func Generate(sessionID int64, secret []byte, expiresAt time.Time) (string, error) {
+func Generate(sessionID int64, secret []byte, livetyme time.Duration) (string, error) {
 	claims := SessionClaims{
 		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expiresAt),  // Время истечения
-			IssuedAt:  jwt.NewNumericDate(time.Now()), // Текущее время
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(livetyme)), // Время истечения
+			IssuedAt:  jwt.NewNumericDate(time.Now()),               // Текущее время
 		},
 	}
 
@@ -31,7 +31,7 @@ func Generate(sessionID int64, secret []byte, expiresAt time.Time) (string, erro
 	return token.SignedString(secret)
 }
 
-func GetClaimsFrom(tokenString string, secret []byte) (*SessionClaims, error) {
+func getClaimsFrom(tokenString string, secret []byte) (*SessionClaims, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&SessionClaims{},
@@ -54,26 +54,19 @@ func GetClaimsFrom(tokenString string, secret []byte) (*SessionClaims, error) {
 	return nil, ErrTokenInvalid
 }
 
-func GetSessionIDFrom(tokenString string, secret []byte) (sessionID int64, err error) {
-	claims, err := GetClaimsFrom(tokenString, secret)
+func VerifyAndGetClaims(tokenString string, secret []byte) (*SessionClaims, error) {
+	claims, err := getClaimsFrom(tokenString, secret)
 	if err != nil {
-		return 0, err
-	}
-	return claims.SessionID, nil
-}
-
-func Verify(tokenString string, secret []byte) error {
-	claims, err := GetClaimsFrom(tokenString, secret)
-	if err != nil {
-		return ErrTokenInvalid
+		return nil, err
 	}
 	switch time.Now().Compare(claims.ExpiresAt.Time) {
 	case -1:
-		return nil
+		return claims, nil
 	case 0:
-		return nil
+		return claims, nil
 	case 1:
-		return ErrTokenExpired
+		return nil, ErrTokenExpired
+	default:
+		return claims, nil
 	}
-	return nil
 }

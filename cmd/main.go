@@ -9,8 +9,9 @@ import (
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/patrickmn/go-cache"
+	"github.com/teryble09/auth_service/app/custom_middleware"
 	"github.com/teryble09/auth_service/app/handler"
-	custom_middleware "github.com/teryble09/auth_service/app/middleware"
 	"github.com/teryble09/auth_service/app/service"
 	"github.com/teryble09/auth_service/app/storage/postgres"
 )
@@ -31,11 +32,14 @@ func main() {
 		panic(err.Error())
 	}
 
+	blacklist := cache.New(time.Hour, time.Minute*5)
+
 	srv := &service.AuthService{
 		Logger:        logger,
 		DB:            db,
-		TokenLivetime: time.Hour,
+		TokenLivetime: time.Second,
 		Secret:        "asdf",
+		BlackList:     blacklist,
 	}
 
 	router := chi.NewRouter()
@@ -43,10 +47,12 @@ func main() {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
-	router.Post("/token", handler.NewSession(srv))
-	router.Get("/user_guid", custom_middleware.VerifyToken(handler.GetUserGuid(srv), srv.Secret))
-	router.Post("/refresh", custom_middleware.VerifyToken(handler.RefreshToken(srv), srv.Secret))
+	authMidlleware := custom_middleware.NewVerifyToken(srv.Secret, srv.BlackList)
 
+	router.Post("/token", handler.NewSession(srv))
+	router.With(authMidlleware).Get("/user_guid", handler.GetUserGuid(srv))
+	router.With(authMidlleware).Post("/refresh", handler.RefreshToken(srv))
+	router.With(authMidlleware).Delete("/deactivate", handler.DeactivateSession(srv))
 	err = http.ListenAndServe("0.0.0.0:"+port, router)
 	if err != nil {
 		panic(err)

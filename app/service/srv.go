@@ -2,18 +2,18 @@ package service
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/teryble09/auth_service/app/dto"
 	"github.com/teryble09/auth_service/app/model"
-	"github.com/teryble09/auth_service/app/token"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/teryble09/auth_service/app/pkg/access_token"
+	"github.com/teryble09/auth_service/app/pkg/refresh_token"
+	"github.com/teryble09/auth_service/app/storage"
 )
 
 type AuthService struct {
@@ -22,6 +22,7 @@ type AuthService struct {
 	TokenLivetime time.Duration
 	Secret        string
 	WebhookAdress string
+	BlackList     *cache.Cache
 }
 
 func (srv *AuthService) NewSession(req dto.NewSessionRequest) (resp dto.NewSessionResponse, err error) {
@@ -30,24 +31,20 @@ func (srv *AuthService) NewSession(req dto.NewSessionRequest) (resp dto.NewSessi
 	session.IP = req.IP
 	session.UserAgent = req.UserAgent
 
-	refreshToken := base64.RawURLEncoding.EncodeToString([]byte(rand.Text()))
-
-	hashedRToken, err := bcrypt.GenerateFromPassword([]byte(refreshToken), bcrypt.DefaultCost)
-	if err != nil {
-		srv.Logger.Error("Could not hash", "token", refreshToken, "error", err.Error())
-		return dto.NewSessionResponse{}, err
-	}
-
-	session.RefreshTokenHash = string(hashedRToken)
+	refreshToken, hashedRToken := refresh_token.MustCreateNew()
+	session.RefreshTokenHash = hashedRToken
 
 	sessionID, err := srv.DB.CreateNewSession(session)
+
 	if err != nil {
-		srv.Logger.Error("Could not save session to db", "error", err.Error())
+		srv.Logger.Error("Could not create session", "error", err.Error())
 		return dto.NewSessionResponse{}, err
 	}
 
-	sighnedToken, err := token.Generate(sessionID, []byte(srv.Secret), time.Now().Add(srv.TokenLivetime))
+	sighnedToken, err := access_token.Generate(sessionID, []byte(srv.Secret), srv.TokenLivetime)
+
 	if err != nil {
+		srv.Logger.Error("Could not create access token", "SessionID", sessionID, "error", err.Error())
 		return dto.NewSessionResponse{}, err
 	}
 
@@ -59,27 +56,34 @@ func (srv *AuthService) NewSession(req dto.NewSessionRequest) (resp dto.NewSessi
 
 func (srv *AuthService) GetUserGuid(req dto.GetUserGuidRequest) (dto.GetUserGuidResponse, error) {
 	guid, err := srv.DB.GetUserGuid(req.SessionID)
+	if err == storage.ErrSessionNotExist {
+		srv.Logger.Error("Trying to get user guid by sessionID but session does not exist", "sessionID", req.SessionID)
+	}
 	return dto.GetUserGuidResponse{UserGUID: guid}, err
 }
 
 var ErrUserAgentChange = errors.New("user agent changed")
+var ErrWrongRefreshToken = errors.New("refresh tokens does not match")
 
 func (srv *AuthService) RefreshPair(req dto.RefreshPairRequest) (dto.RefreshPairResponse, error) {
-	sessionID, err := token.GetSessionIDFrom(req.AccessToken, []byte(srv.Secret))
+	session, err := srv.DB.GetSession(req.SessionID)
 	if err != nil {
+		srv.Logger.Error("Could not get session", "error", err.Error())
 		return dto.RefreshPairResponse{}, err
 	}
 
-	session, err := srv.DB.GetSession(sessionID)
-	if err != nil {
-		return dto.RefreshPairResponse{}, err
+	if refresh_token.Compare(req.RefreshToken, session.RefreshTokenHash) {
+		srv.Logger.Warn("Trying to refresh with a wrong refresh token", "old", session.RefreshTokenHash, "new", refresh_token.MustHashToken(req.RefreshToken))
+		return dto.RefreshPairResponse{}, ErrWrongRefreshToken
 	}
 
 	if session.UserAgent != req.UserAgent {
 		deactivate := dto.DeactivateSessionRequest{
 			AccessToken: req.AccessToken,
+			SessionID:   req.SessionID,
 		}
 		srv.DeactivateSession(deactivate)
+		srv.Logger.Warn("User agent changed ", "sessionID", req.SessionID)
 		return dto.RefreshPairResponse{}, ErrUserAgentChange
 	}
 
@@ -98,36 +102,31 @@ func (srv *AuthService) RefreshPair(req dto.RefreshPairRequest) (dto.RefreshPair
 		}
 	}
 
-	refreshToken := base64.RawURLEncoding.EncodeToString([]byte(rand.Text()))
-	hashedRToken, err := bcrypt.GenerateFromPassword([]byte(refreshToken), bcrypt.DefaultCost)
+	refreshToken, hashRefreshToken := refresh_token.MustCreateNew()
+
+	err = srv.DB.RefreshSession(req.SessionID, req.IP, hashRefreshToken)
 	if err != nil {
-		srv.Logger.Error("Could not hash", "token", refreshToken, "error", err.Error())
+		srv.Logger.Error("Could not refresh session", "error", err.Error())
 		return dto.RefreshPairResponse{}, err
 	}
 
-	err = srv.DB.RefreshSession(sessionID, req.IP, string(hashedRToken))
-	if err != nil {
-		srv.Logger.Error("Could not save new refresh token", "error", err.Error())
-		return dto.RefreshPairResponse{}, err
-	}
-
-	accessToken, err := token.Generate(sessionID, []byte(srv.Secret), time.Now().Add(srv.TokenLivetime))
+	accessToken, err := access_token.Generate(req.SessionID, []byte(srv.Secret), srv.TokenLivetime)
 	if err != nil {
 		srv.Logger.Error("Could not generate new token", "error", err.Error())
 		return dto.RefreshPairResponse{}, err
 	}
 
+	srv.BlackList.Set(req.AccessToken, true, srv.TokenLivetime)
+
 	return dto.RefreshPairResponse{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 func (srv *AuthService) DeactivateSession(req dto.DeactivateSessionRequest) error {
-	sessionID, err := token.GetSessionIDFrom(req.AccessToken, []byte(srv.Secret))
-	if err != nil {
-		return err
-	}
+	srv.BlackList.Set(req.AccessToken, true, srv.TokenLivetime)
 
-	err = srv.DB.DeleteSession(sessionID)
+	err := srv.DB.DeleteSession(req.SessionID)
 	if err != nil {
+		srv.Logger.Error("Could not delete session", "error", err.Error())
 		return err
 	}
 

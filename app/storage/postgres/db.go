@@ -92,7 +92,7 @@ var stmtSelectSession = &sql.Stmt{}
 
 func (db DB) GetSession(sessionID int64) (model.Session, error) {
 	session := model.Session{}
-	row := stmtSelectUserGuid.QueryRow(sessionID)
+	row := stmtSelectSession.QueryRow(sessionID)
 	err := row.Scan(&session.SessionID, &session.UserGUID, &session.UserAgent, &session.IP, &session.RefreshTokenHash)
 	if err == sql.ErrNoRows {
 		return session, storage.ErrSessionNotExist
@@ -114,8 +114,5 @@ var stmtDeleteSession = &sql.Stmt{}
 
 func (db DB) DeleteSession(sessionID int64) error {
 	_, err := stmtDeleteSession.Exec(sessionID)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }

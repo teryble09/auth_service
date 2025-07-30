@@ -21,7 +21,7 @@ type RefreshPairRequest struct {
 	AccessToken  string
 	RefreshToken string `json:"refresh_token"`
 
-	Secret    string
+	SessionID int64
 	UserAgent string
 	IP        string
 }
@@ -41,6 +41,7 @@ type GetUserGuidResponse struct {
 
 type DeactivateSessionRequest struct {
 	AccessToken string
+	SessionID   int64
 }
 
 type WebhookPostMessage struct {
